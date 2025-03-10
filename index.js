@@ -1,7 +1,8 @@
-const { OpenAPIClient } = require("./src/open-api-client")
+import { OpenAPIClient } from "./src/open-api-client.js";
+import { getFormattedTime } from "./src/utils/time-utils.js";
 
 function greet(name) {
     return `Hello ${name}!`;
 }
 
-module.exports = {greet, OpenAPIClient}
+export {greet, getFormattedTime, OpenAPIClient}
