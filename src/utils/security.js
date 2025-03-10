@@ -70,9 +70,89 @@ function normalizePEM(keyPEM, keyType) {
     return header + "\n" + keyPEM + "\n" + footer;
 }
 
+/**
+ * Generate a random AES key of the specified length.
+ * @param {number} length - Length of the key in bytes (e.g., 16, 24, 32 for AES)
+ * @returns {Buffer} Generated key as a Buffer
+ * @throws {Error} If key generation fails
+ */
+function generateAESKey(length) {
+    if (![16, 24, 32].includes(length)) {
+        throw new Error("Invalid AES key length. Must be 16, 24, or 32 bytes.");
+    }
+    logger.log(logger.log_level.INFO, "Generating AES Key...");
+
+    return crypto.randomBytes(length);
+}
+
+/**
+ * AES Encrypt function (ECB mode with PKCS5 padding)
+ * @param {Buffer} key - 256-bit (32-byte) AES key
+ * @param {string} content - Plaintext content to encrypt
+ * @returns {string} Base64 encoded ciphertext
+ */
+function aesEncrypt(key, content) {
+    if (key.length !== 32) {
+        throw new Error("Invalid key length. AES-256 requires a 32-byte key.");
+    }
+    logger.log(logger.log_level.INFO, "AES Key is valid, adding paddings...")
+
+    const blockSize = 16; // AES block size (128 bits)
+    const paddedContent = pkcs5Padding(Buffer.from(content, "utf-8"), blockSize);
+
+    const cipher = crypto.createCipheriv("aes-256-ecb", key, null);
+    cipher.setAutoPadding(false); // We handle padding manually
+
+    const encrypted = Buffer.concat([cipher.update(paddedContent), cipher.final()]);
+    return encrypted.toString("base64");
+}
+
+/**
+ * PKCS5 Padding function
+ * @param {Buffer} buffer - Data to pad
+ * @param {number} blockSize - AES block size (16 bytes)
+ * @returns {Buffer} Padded data
+ */
+function pkcs5Padding(buffer, blockSize) {
+    const paddingSize = blockSize - (buffer.length % blockSize);
+    const padding = Buffer.alloc(paddingSize, paddingSize); // Fill with padding value
+    return Buffer.concat([buffer, padding]);
+}
+
+/**
+ * Encrypt data using RSA public key (PKCS#1 v1.5).
+ * @param {string} publicKeyPEM - The RSA public key in PEM format.
+ * @param {Buffer} content - The content to encrypt.
+ * @returns {string} Base64-encoded encrypted content.
+ * @throws {Error} If encryption fails.
+ */
+function rsaEncrypt(publicKeyPEM, content) {
+    try {
+        // Normalize PEM format if needed
+        publicKeyPEM = normalizePEM(publicKeyPEM, "PUBLIC");
+
+        // Encrypt the content using RSA public key
+        const encryptedBuffer = crypto.publicEncrypt(
+            {
+                key: publicKeyPEM,
+                padding: crypto.constants.RSA_PKCS1_PADDING, // Equivalent to PKCS#1 v1.5
+            },
+            content
+        );
+
+        // Convert the encrypted content to Base64
+        return encryptedBuffer.toString("base64");
+    } catch (error) {
+        throw new Error("RSA encryption failed: " + error.message);
+    }
+}
+
 
 export {
     decodeBase64PrivateKey,
     createSignature,
-    normalizePEM
+    normalizePEM,
+    generateAESKey,
+    aesEncrypt,
+    rsaEncrypt
 };
