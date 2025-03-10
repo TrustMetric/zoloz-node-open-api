@@ -69,6 +69,26 @@ class OpenAPIClient {
         try {
             logger.log(logger.log_level.INFO, "Sending request...")
             const response = await axios.post(apiURL, requestString, requestConfig);
+            
+            if (this.encrypted) {
+                let encryptHeader = response.headers["encrypt"];
+                logger.log(logger.log_level.INFO, "Encrypt Header Response: " + encryptHeader);
+                
+                const parts = encryptHeader.split("symmetricKey=");
+                if (parts.length < 2) {
+                    throw new Error("symmetricKey not found");
+                }
+
+                let unescapedAESKey = querystring.unescape(parts[1]);
+                logger.log(logger.log_level.INFO, "Unescaped AES Key: " + unescapedAESKey);
+
+                let decryptedAESKey = security.rsaDecrypt(this.merchantPrivateKey, unescapedAESKey);
+                logger.log(logger.log_level.INFO, "Decrypted AES Key: " + decryptedAESKey);
+
+                let decryptedResponse = security.aesDecrypt(decryptedAESKey, response.data);
+
+                return JSON.parse(decryptedResponse);
+            }
 
             return response.data;
         } catch (error) {

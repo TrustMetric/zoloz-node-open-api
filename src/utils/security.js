@@ -120,6 +120,41 @@ function pkcs5Padding(buffer, blockSize) {
 }
 
 /**
+ * Decrypts AES-256-ECB encrypted content
+ * @param {Buffer} key - The AES key (must be 16, 24, or 32 bytes)
+ * @param {string} content - The Base64-encoded ciphertext
+ * @returns {string} - The decrypted plaintext
+ */
+function aesDecrypt(key, content) {
+    // Decode Base64 content
+    const encryptedData = Buffer.from(content, "base64");
+
+    // Create AES decipher in ECB mode (NO IV required)
+    const decipher = crypto.createDecipheriv("aes-256-ecb", key, null);
+    
+    // Disable automatic padding since we're handling it manually
+    decipher.setAutoPadding(false);
+
+    // Decrypt the data
+    let decrypted = Buffer.concat([decipher.update(encryptedData), decipher.final()]);
+
+    // Remove PKCS#5 padding
+    decrypted = pkcs5Unpadding(decrypted);
+
+    return decrypted.toString();
+}
+
+/**
+ * Removes PKCS#5 padding
+ * @param {Buffer} data - Padded data
+ * @returns {Buffer} - Unpadded data
+ */
+function pkcs5Unpadding(data) {
+    const padLength = data[data.length - 1];
+    return data.slice(0, -padLength);
+}
+
+/**
  * Encrypt data using RSA public key (PKCS#1 v1.5).
  * @param {string} publicKeyPEM - The RSA public key in PEM format.
  * @param {Buffer} content - The content to encrypt.
@@ -147,6 +182,33 @@ function rsaEncrypt(publicKeyPEM, content) {
     }
 }
 
+function rsaDecrypt(privateKeyPEM, content) {
+    try {
+        // Decode Base64 content to binary
+        const decodedCiphertext = Buffer.from(content, "base64");
+        logger.log(logger.log_level.INFO, "Decoded cipher text length: " + decodedCiphertext.length);
+        logger.log(logger.log_level.INFO, "Decoded cipher text: " + decodedCiphertext.toString("hex"));
+
+        // Normalize the private key PEM
+        privateKeyPEM = normalizePEM(privateKeyPEM, "PRIVATE");
+
+        // Decrypt the content using RSA private key
+        const decryptedData = crypto.privateDecrypt(
+            {
+                key: privateKeyPEM,
+                padding: crypto.constants.RSA_PKCS1_PADDING, // Equivalent to PKCS1v15
+            },
+            decodedCiphertext
+        );
+
+        logger.log(logger.log_level.INFO, "Decrypted Data:" + decryptedData.toString());
+        return decryptedData;
+    } catch (error) {
+        console.error("Decryption failed:", error);
+        throw error; // Re-throwing to be handled by the caller
+    }
+}
+
 
 export {
     decodeBase64PrivateKey,
@@ -154,5 +216,7 @@ export {
     normalizePEM,
     generateAESKey,
     aesEncrypt,
-    rsaEncrypt
+    aesDecrypt,
+    rsaEncrypt,
+    rsaDecrypt
 };
