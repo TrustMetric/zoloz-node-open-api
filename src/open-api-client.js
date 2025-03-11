@@ -4,6 +4,8 @@ import querystring from "querystring";
 import * as timeUtils from "./utils/time-utils.js";
 import * as logger from "./utils/logger.js";
 import * as security from "./utils/security.js";
+import * as parser from "./utils/parser.js";
+import { error } from "console";
 
 class OpenAPIClient {
     hostURL;
@@ -43,8 +45,6 @@ class OpenAPIClient {
             // set encrypted headers
             requestConfig.headers["Content-Type"] = "text/plain; charset=UTF-8";
             requestConfig.headers["Encrypt"] = "algorithm=RSA_AES, symmetricKey=" + querystring.escape(encryptedAESKey);
-            // req.Header.Set(net_utils.HeaderContentType, net_utils.ContentTypePlainText)
-		    // req.Header.Set(net_utils.HeaderEncrypt, "algorithm=RSA_AES, symmetricKey="+url.QueryEscape(encryptedAESKey))
         } else {
             requestConfig.headers["Content-Type"] = "application/json; charset=UTF-8";
         }
@@ -69,6 +69,29 @@ class OpenAPIClient {
         try {
             logger.log(logger.log_level.INFO, "Sending request...")
             const response = await axios.post(apiURL, requestString, requestConfig);
+
+            let responseSignatureHeader = response.headers["signature"];
+            logger.log(logger.log_level.INFO, "Response Signature Header is: "+responseSignatureHeader);
+
+            let responseSignature = responseSignatureHeader.split("signature=");
+            if (responseSignature.length < 2) {
+                throw new Error("signature not found");
+            }
+
+            responseSignature = querystring.unescape(responseSignature[1]);
+            logger.log(logger.log_level.INFO, "Response Signature is: "+responseSignature);
+
+            let responseTime = response.headers["response-time"].trim();
+            logger.log(logger.log_level.INFO, "Response Time is: "+responseTime);
+
+            let unverifiedContent = "POST " + apiName + "\n" + this.clientID + "." + responseTime + "." + parser.safeStringify(response.data);
+            logger.log(logger.log_level.INFO, "Unverified Content is: "+unverifiedContent);
+
+            let isVerified = security.verifySignature(this.openAPIPublicKey, responseSignature, unverifiedContent);
+            if (!isVerified) {
+                throw new Error("signature verification failed!");
+            }
+            logger.log(logger.log_level.INFO, "Signature verified...");
             
             if (this.encrypted) {
                 let encryptHeader = response.headers["encrypt"];
