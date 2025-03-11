@@ -47,6 +47,27 @@ function createSignature(unsignedContent, privateKey) {
     return encodedSignature;
 }
 
+function verifySignature(publicKeyStr, signatureEncoded, unsignedContent) {
+    try {
+        const wrappedPEM = normalizePEM(publicKeyStr, "PUBLIC");
+        
+        // Create a verifier object
+        const verifier = crypto.createVerify("RSA-SHA256");
+        verifier.update(unsignedContent);
+        verifier.end();
+
+        // Decode Base64 signature
+        const signature = Buffer.from(signatureEncoded, "base64");
+
+        // Verify the signature
+        const isValid = verifier.verify(wrappedPEM, signature);
+        return isValid;
+    } catch (error) {
+        console.error("Error verifying signature:", error);
+        return false;
+    }
+}
+
 /**
  * Normalizes a PEM-formatted key by removing unnecessary headers/footers and reformatting it.
  * @param {string} keyPEM - The raw PEM string.
@@ -213,6 +234,7 @@ function rsaDecrypt(privateKeyPEM, content) {
 export {
     decodeBase64PrivateKey,
     createSignature,
+    verifySignature,
     normalizePEM,
     generateAESKey,
     aesEncrypt,
